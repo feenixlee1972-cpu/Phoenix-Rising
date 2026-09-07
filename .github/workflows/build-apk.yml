@@ -34,12 +34,37 @@ jobs:
           mkdir -p android/app/src/main/assets
           cp index.html android/app/src/main/assets/index.html
 
+      - name: Validate required Android assets
+        run: |
+          test -s android/app/src/main/assets/index.html
+          test -s android/app/src/main/assets/enhancements.js
+          test -s android/app/src/main/assets/payout_currency.js
+          test -s android/app/src/main/AndroidManifest.xml
+          test -s android/app/src/main/java/com/phoenixrises/app/MainActivity.java
+
       - name: Build debug APK
         run: gradle -p android assembleDebug --stacktrace
+
+      - name: Package complete source backup
+        run: |
+          mkdir -p release-bundle
+          cp -R android release-bundle/android
+          cp -R .github release-bundle/.github
+          cp index.html README.md release-bundle/
+          cp -R docs release-bundle/docs 2>/dev/null || true
+          cp -R android/app/src/main/assets release-bundle/assets
+          (cd release-bundle && zip -r ../Phoenix-Rises-source-backup.zip .)
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Phoenix-Rises-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload complete source backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phoenix-Rises-complete-source-backup
+          path: Phoenix-Rises-source-backup.zip
           if-no-files-found: error
