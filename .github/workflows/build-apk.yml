@@ -33,6 +33,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/assets
           cp index.html android/app/src/main/assets/index.html
+          cp android/app/src/main/assets/enhancements.js android/app/src/main/assets/enhancements.js
 
       - name: Build debug APK
         run: gradle -p android assembleDebug --stacktrace
