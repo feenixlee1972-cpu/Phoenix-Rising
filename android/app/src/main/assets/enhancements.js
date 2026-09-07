@@ -65,6 +65,89 @@
     }
   }
 
+  // Add a dedicated payout setup/request page. It collects routing details locally,
+  // but never claims that money was sent until a real payout backend confirms it.
+  if (nav && !$('pg-payouts')) {
+    const btn = document.createElement('button');
+    btn.dataset.pg = 'payouts';
+    btn.textContent = '💳 Payouts';
+    btn.onclick = function(){
+      document.querySelectorAll('.tabbar button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      $('pg-payouts').classList.add('active');
+    };
+    nav.appendChild(btn);
+
+    const page = document.createElement('div');
+    page.className = 'page';
+    page.id = 'pg-payouts';
+    page.innerHTML = `
+      <div class="card">
+        <h2 style="color:var(--pink)">💳 Payout Center</h2>
+        <p class="hint">Choose where a verified, available balance should be paid. These settings are saved on this device. A payout is only marked sent after a connected payment provider confirms it.</p>
+        <select id="pr-payout-method">
+          <option value="paypal">PayPal</option>
+          <option value="bank">Bank</option>
+          <option value="wallet">Digital Wallet</option>
+        </select>
+        <div id="pr-payout-fields"></div>
+        <input type="number" id="pr-payout-amount" min="0.01" step="0.01" placeholder="Payout amount ($)" />
+        <button class="btn btn-pink" id="pr-payout-request">Request Payout</button>
+        <p class="hint" id="pr-payout-status">No payout request submitted.</p>
+      </div>
+      <div class="card">
+        <h3 style="color:var(--cyan)">Payout History</h3>
+        <div id="pr-payout-history"><p class="hint">No payout requests yet.</p></div>
+      </div>`;
+    document.body.insertBefore(page, nav);
+
+    const method = $('pr-payout-method');
+    const fields = $('pr-payout-fields');
+    const renderFields = function(){
+      const m=method.value;
+      if(m==='paypal') fields.innerHTML='<input id="pr-paypal-email" type="email" placeholder="PayPal email" autocomplete="email" />';
+      else if(m==='bank') fields.innerHTML='<input id="pr-bank-name" placeholder="Account holder name" autocomplete="name" /><input id="pr-bank-account" placeholder="Account / IBAN" autocomplete="off" /><input id="pr-bank-routing" placeholder="Routing / transit number" autocomplete="off" />';
+      else fields.innerHTML='<input id="pr-wallet-network" placeholder="Wallet network (e.g. BTC)" /><input id="pr-wallet-address" placeholder="Digital wallet address" autocomplete="off" />';
+    };
+    method.addEventListener('change',renderFields);
+    renderFields();
+
+    const payoutKey='phoenix_payouts';
+    const renderHistory=function(){
+      const list=JSON.parse(localStorage.getItem(payoutKey)||'[]');
+      const box=$('pr-payout-history');
+      if(!list.length){box.innerHTML='<p class="hint">No payout requests yet.</p>';return;}
+      box.innerHTML=list.slice().reverse().map(x=>'<div class="log-item"><div><b>$'+Number(x.amount).toFixed(2)+'</b> · '+x.method+'<div style="font-size:.8em;color:#888">'+x.destination+'</div></div><div style="color:#ff9e00">REQUESTED</div></div>').join('');
+    };
+    $('pr-payout-request').onclick=function(){
+      const amount=Number($('pr-payout-amount').value);
+      if(!Number.isFinite(amount)||amount<=0){alert('Enter a valid payout amount.');return;}
+      let destination='';
+      if(method.value==='paypal') destination=($('pr-paypal-email')||{}).value||'';
+      if(method.value==='bank') destination=($('pr-bank-account')||{}).value||'';
+      if(method.value==='wallet') destination=($('pr-wallet-address')||{}).value||'';
+      if(!destination.trim()){alert('Enter the payout destination.');return;}
+      const list=JSON.parse(localStorage.getItem(payoutKey)||'[]');
+      list.push({amount:+amount.toFixed(2),method:method.value,destination:destination.trim(),date:new Date().toISOString(),status:'requested'});
+      localStorage.setItem(payoutKey,JSON.stringify(list));
+      $('pr-payout-status').textContent='Payout request recorded locally. It is NOT marked paid until a real provider confirms the transfer.';
+      $('pr-payout-amount').value='';
+      renderHistory();
+    };
+    renderHistory();
+  }
+
+  // Add an Android-friendly app download/install card when the web build is opened.
+  if(!$('pr-install-card')){
+    const card=document.createElement('div');
+    card.className='card';
+    card.id='pr-install-card';
+    card.style.cssText='max-width:500px;margin:14px auto;padding:16px;background:var(--card);border:1px solid #222;border-radius:14px;box-shadow:0 0 12px rgba(0,240,255,.08)';
+    card.innerHTML='<h3 style="color:var(--cyan)">📲 Phoenix Rises Android</h3><p class="hint">Use the official APK download when a signed build is published. Android may ask you to allow installation from this source.</p><button class="btn btn-cyan" id="pr-download-apk" disabled>APK BUILD NOT PUBLISHED YET</button><p class="hint">The download button will be enabled only when a real APK file is available.</p>';
+    document.body.appendChild(card);
+  }
+
   // Make the session timer survive backgrounding/process suspension by using a timestamp.
   // It continues until the user explicitly presses STOP.
   let running = localStorage.getItem('pr_running') === '1';
@@ -114,7 +197,6 @@
     }
   };
 
-  // Restore a session after the app returns from background or is reopened.
   if(running && startMs){
     tick();
     setButton();
