@@ -24,16 +24,21 @@ public class MainActivity extends Activity {
     }
   }
 
+  private void inject(WebView view, String asset) {
+    String script = readAsset(asset);
+    if (!script.isEmpty()) {
+      view.evaluateJavascript("eval(" + JSONObject.quote(script) + ")", null);
+    }
+  }
+
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
     final WebView w = new WebView(this);
     w.setWebViewClient(new WebViewClient() {
       @Override public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
-        String script = readAsset("enhancements.js");
-        if (!script.isEmpty()) {
-          view.evaluateJavascript("eval(" + JSONObject.quote(script) + ")", null);
-        }
+        inject(view, "enhancements.js");
+        inject(view, "payout_currency.js");
       }
     });
     WebSettings s = w.getSettings();
