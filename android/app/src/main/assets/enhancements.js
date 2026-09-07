@@ -45,7 +45,7 @@
     page.innerHTML=`<div class="card"><h2 style="color:var(--pink)">💳 Payout Center</h2>
       <p class="hint">Select what you are transferring. <b>Gold → CAD</b>. <b>Bitcoin → BTC wallet.</b> Other verified revenue can use PayPal or Bank.</p>
       <select id="pr-payout-source"><option value="gold">Gold Mining → CAD</option><option value="bitcoin">Bitcoin Mining → BTC Wallet</option><option value="other">Other Earnings → PayPal / Bank</option></select>
-      <div id="pr-source-fields"></div><input type="number" id="pr-payout-amount" min="0.01" step="0.01" placeholder="Transfer amount" />
+      <div id="pr-source-fields"></div><input type="number" id="pr-payout-amount" min="0.00000001" step="0.00000001" placeholder="Transfer amount" />
       <button class="btn btn-pink" id="pr-payout-request">Request Transfer</button><p class="hint" id="pr-payout-status">No transfer request submitted.</p></div>
       <div class="card"><h3 style="color:var(--cyan)">Transfer History</h3><div id="pr-payout-history"><p class="hint">No transfers yet.</p></div></div>`;
     document.body.insertBefore(page,nav);
@@ -57,7 +57,8 @@
     }
     source.addEventListener('change',renderSource); renderSource();
     const payoutKey='phoenix_payouts';
-    function renderHistory(){ const list=JSON.parse(localStorage.getItem(payoutKey)||'[]'), box=$('pr-payout-history'); if(!list.length){box.innerHTML='<p class="hint">No transfers yet.</p>';return;} box.innerHTML=list.slice().reverse().map(x=>'<div class="log-item"><div><b>'+x.amount+' '+x.currency+'</b> · '+x.source+'<div style="font-size:.8em;color:#888">'+x.destination+'</div></div><div style="color:#ff9e00">REQUESTED</div></div>').join(''); }
+    function esc(v){return String(v).replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));}
+    function renderHistory(){ const list=JSON.parse(localStorage.getItem(payoutKey)||'[]'), box=$('pr-payout-history'); if(!list.length){box.innerHTML='<p class="hint">No transfers yet.</p>';return;} box.innerHTML=list.slice().reverse().map(x=>'<div class="log-item"><div><b>'+esc(x.amount)+' '+esc(x.currency)+'</b> · '+esc(x.source)+'<div style="font-size:.8em;color:#888">'+esc(x.destination)+'</div></div><div style="color:#ff9e00">'+esc(x.status||'REQUESTED').toUpperCase()+'</div></div>').join(''); }
     $('pr-payout-request').onclick=function(){
       const amount=Number($('pr-payout-amount').value); if(!Number.isFinite(amount)||amount<=0){alert('Enter a valid transfer amount.');return;}
       let currency='', destination='', sourceName=source.value;
@@ -65,7 +66,7 @@
       else if(sourceName==='bitcoin'){currency='BTC'; destination=($('pr-btc-address')||{}).value||'';}
       else {currency='USD'; destination=($('pr-other-destination')||{}).value||'';}
       if(!destination.trim()){alert('Enter the transfer destination.');return;}
-      const list=JSON.parse(localStorage.getItem(payoutKey)||'[]'); list.push({amount:+amount.toFixed(8),currency,source:sourceName,destination:destination.trim(),date:new Date().toISOString(),status:'requested'}); localStorage.setItem(payoutKey,JSON.stringify(list));
+      const list=JSON.parse(localStorage.getItem(payoutKey)||'[]'); list.push({amount:+amount.toFixed(currency==='BTC'?8:2),currency,source:sourceName,destination:destination.trim(),date:new Date().toISOString(),status:'requested'}); localStorage.setItem(payoutKey,JSON.stringify(list));
       $('pr-payout-status').textContent='Transfer request recorded. It will only be marked completed after the connected provider confirms the transfer.'; $('pr-payout-amount').value=''; renderHistory();
     }; renderHistory();
   }
@@ -76,6 +77,13 @@
   function fmt2(s){s=Math.max(0,Math.floor(s));return String(Math.floor(s/3600)).padStart(2,'0')+':'+String(Math.floor((s%3600)/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
   function tick(){if(!running||!startMs)return;const sec=Math.floor((Date.now()-startMs)/1000);localStorage.setItem('pr_tsec',String(sec));if($('timer'))$('timer').textContent=fmt2(sec);}
   function setButton(){if(originalBtn)originalBtn.textContent=running?'⏹ STOP SESSION':'▶ START SESSION';}
-  window.toggleTimer=function(){if(running){const sec=Math.max(0,Math.floor((Date.now()-startMs)/1000));running=false;localStorage.setItem('pr_running','0');localStorage.removeItem('pr_start_ms');if(interval)clearInterval(interval);interval=null;if(sec>5&&window.S&&Array.isArray(S.sessions)){const agents=selector?selector.value:'50 agents';S.sessions.push({dur:sec,agents:agents,date:new Date().toLocaleString()});localStorage.setItem('pr_tsec','0');if(typeof save==='function')save();}if($('timer'))$('timer').textContent='00:00:00';setButton();if(typeof toast==='function')toast('✅ Session stopped and saved.');}else{running=true;startMs=Date.now();localStorage.setItem('pr_running','1');localStorage.setItem('pr_start_ms',String(startMs));tick();if(interval)clearInterval(interval);interval=setInterval(tick,1000);setButton();if(typeof toast==='function')toast('▶ Session running until you press STOP.');}};
+  function saveSessionLocally(sec){
+    if(sec<=5) return;
+    const key='phoenix_sessions';
+    const list=JSON.parse(localStorage.getItem(key)||'[]');
+    list.push({dur:sec,agents:selector?selector.value:'50 agents',date:new Date().toLocaleString()});
+    localStorage.setItem(key,JSON.stringify(list));
+  }
+  window.toggleTimer=function(){if(running){const sec=Math.max(0,Math.floor((Date.now()-startMs)/1000));running=false;localStorage.setItem('pr_running','0');localStorage.removeItem('pr_start_ms');if(interval)clearInterval(interval);interval=null;saveSessionLocally(sec);localStorage.setItem('pr_tsec','0');if(typeof window.save==='function')window.save();if($('timer'))$('timer').textContent='00:00:00';setButton();if(typeof window.toast==='function')window.toast('✅ Session stopped and saved.');}else{running=true;startMs=Date.now();localStorage.setItem('pr_running','1');localStorage.setItem('pr_start_ms',String(startMs));tick();if(interval)clearInterval(interval);interval=setInterval(tick,1000);setButton();if(typeof window.toast==='function')window.toast('▶ Session running until you press STOP.');}};
   if(running&&startMs){tick();setButton();interval=setInterval(tick,1000);} document.addEventListener('visibilitychange',tick); window.addEventListener('pageshow',tick);
 })();
